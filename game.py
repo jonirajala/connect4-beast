@@ -56,111 +56,27 @@ class Game:
         print(output)
 
     def allowed_moves(self, board):
-        return np.where([self.is_allowed(col, board) for col in range(board.shape[1])])[0]
+        moves = [self.is_allowed(col, board) for col in range(board.shape[1])]
+        return [index for index, element in enumerate(moves) if element]
 
-    def simulate(self, col, n, board, player):
+    def simulate(self, move, n, board, player):
         wins = 0
         for i in range(n):
             sim_board = board.copy()
             sim_player = player
-            if col is not None:
-                _, sim_board = self.play_move(col, sim_board, sim_player)
+            if move is not None:
+                _, sim_board = self.play_move(move, sim_board, sim_player)
                 sim_player *= -1
             
             state = "Continue"
             while state == "Continue":
                 allowed_moves = self.allowed_moves(sim_board)
-                random_col = np.random.choice(allowed_moves)
-                state, sim_board = self.play_move(random_col, sim_board, sim_player)
+                random_move = np.random.choice(allowed_moves)
+                state, sim_board = self.play_move(random_move, sim_board, sim_player)
                 if state == "Win":
                     if sim_player == player:
                         wins += 1
                     break
                 sim_player *= -1
         return wins
-
-
-class Node:
-    def __init__(self, board, game, move=None, parent=None, player=None):
-        self.board = board
-        self.game = game
-        self.move = move  
-        self.parent = parent
-        self.children = []
-        self.wins = 0
-        self.visits = 0
-        self.player = player  
-
-    def add_child(self, child_node):
-        self.children.append(child_node)
-
-    def update(self, result):
-        self.visits += 1
-        self.wins += result
-
-    def is_fully_expanded(self):
-        return len(self.children) == len(self.game.allowed_moves(self.board))
-
-    def best_child(self, c_param=1.4):
-        choices_weights = [
-            (child.wins / child.visits) + c_param * np.sqrt((2 * np.log(self.visits) / child.visits))
-            for child in self.children
-        ]
-        return self.children[np.argmax(choices_weights)]
-
-def selection(node):
-    while node.is_fully_expanded():
-        node = node.best_child()
-    return node
     
-
-def expansion(leaf_node, game):    
-    allowed_moves = game.allowed_moves(leaf_node.board)
-    for move in allowed_moves:
-        if not any(child.move == move for child in leaf_node.children):
-            new_state, new_board = game.play_move(move, leaf_node.board.copy(), leaf_node.player)
-            if new_state != "Continue":
-                continue
-            new_node = Node(board=new_board, game=game, move=move, parent=leaf_node, player=-leaf_node.player)
-            leaf_node.add_child(new_node)
-            return new_node
-    return None
-
-def backpropagate(node, result):
-    while node is not None:
-        node.update(result)
-        node = node.parent
-
-def mcts(game, board, player, iterations=500):
-    root = Node(board=board.copy(), game=game, player=player)
-    for _ in range(iterations):
-        leaf_node = selection(root)
-        expanded_node = expansion(leaf_node, game) if not leaf_node.is_fully_expanded() else leaf_node
-        simulation_node = expanded_node if expanded_node is not None else leaf_node
-        result = game.simulate(simulation_node.move, 300, simulation_node.board, simulation_node.player)
-        backpropagate(simulation_node, result)
-
-    
-    print([child.wins for child in root.children])
-    return root.best_child().move
-
-game = Game()
-board, player = game.init_env()
-state = "Continue"
-while state == "Continue":
-    game.draw(board)
-    if player == 1:
-        move = int(input(f"Player {player} move: "))
-        while not game.is_allowed(move, board):
-            print("Invalid Move")
-            move = int(input(f"Player {player} move: "))
-    else:
-        move = mcts(game, board, player, 500)
-    state, board = game.play_move(move, board, player)
-    player *= -1
-
-game.draw(board)
-if state == "Win":
-    print(f"Player {-player} wins")
-else:
-    print(state)
